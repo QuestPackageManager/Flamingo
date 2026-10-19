@@ -43,7 +43,9 @@ struct ProtectionWriter {
     // libndk_translation) keep their own cache of translated code, which is only discarded when the page actually
     // loses and regains PROT_EXEC. So drop execute here, and let the restore below re-grant it.
     if ((original_permissions & PageProtectionType::kExecute) == PageProtectionType::kExecute) {
-      target.ForceExecTransition();
+      target.protection = original_permissions & static_cast<PageProtectionType>(~PROT_EXEC);
+      target.Protect();
+      target.Un
     }
 
     target.protection = original_permissions;
