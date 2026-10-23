@@ -45,7 +45,6 @@ struct ProtectionWriter {
     if ((original_permissions & PageProtectionType::kExecute) == PageProtectionType::kExecute) {
       target.protection = original_permissions & static_cast<PageProtectionType>(~PROT_EXEC);
       target.Protect();
-      target.Un
     }
 
     target.protection = original_permissions;
