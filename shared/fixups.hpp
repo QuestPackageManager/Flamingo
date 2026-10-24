@@ -39,6 +39,14 @@ struct ProtectionWriter {
     auto addr = target.addr;
     __builtin___clear_cache(reinterpret_cast<char*>(addr.data()), reinterpret_cast<char*>(addr.data() + addr.size()));
 
+    // __builtin___clear_cache only handles the hardware I-cache. JIT/binary translators (ex: Waydroid's
+    // libndk_translation) keep their own cache of translated code, which is only discarded when the page actually
+    // loses and regains PROT_EXEC. So drop execute here, and let the restore below re-grant it.
+    if ((original_permissions & PageProtectionType::kExecute) == PageProtectionType::kExecute) {
+      target.protection = original_permissions & static_cast<PageProtectionType>(~PROT_EXEC);
+      target.Protect();
+    }
+
     target.protection = original_permissions;
     target.Protect();
   }
