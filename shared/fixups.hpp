@@ -1,5 +1,8 @@
 #pragma once
 
+#include <linux/membarrier.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -40,11 +43,15 @@ struct ProtectionWriter {
     __builtin___clear_cache(reinterpret_cast<char*>(addr.data()), reinterpret_cast<char*>(addr.data() + addr.size()));
 
     // __builtin___clear_cache only handles the hardware I-cache. JIT/binary translators (ex: Waydroid's
-    // libndk_translation) keep their own cache of translated code, which is only discarded when the page actually
-    // loses and regains PROT_EXEC. So drop execute here, and let the restore below re-grant it.
-    if ((original_permissions & PageProtectionType::kExecute) == PageProtectionType::kExecute) {
-      target.protection = original_permissions & static_cast<PageProtectionType>(~PROT_EXEC);
-      target.Protect();
+    // libndk_translation) keep their own cache of translated code, which is not always discarded.
+    // So, we perform a full membarrier here to:
+    // 1. Ensure all other threads can see the memory has been written
+    // 2. Act as an extra coherency barrier for JITs
+    auto supported_cmds = syscall(__NR_membarrier, MEMBARRIER_CMD_QUERY, 0, 0);
+    if (supported_cmds >= 0) {
+      // If we support it, emit it
+      FLAMINGO_DEBUG("Emitting membarrier for fixup write");
+      syscall(__NR_membarrier, MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0, 0);
     }
 
     target.protection = original_permissions;
