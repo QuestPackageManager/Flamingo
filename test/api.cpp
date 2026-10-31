@@ -18,7 +18,7 @@ auto perform_far_hook_test(uintptr_t hook_location, std::span<uint8_t> to_hook) 
   print_decode_loop(hook_span);
   // Give me back a pointer to some "far" allocated region that we can touch
   return alloc_far(flamingo::PointerWrapper<uint32_t>(std::span<uint32_t>(reinterpret_cast<uint32_t*>(hook_location),
-                                                                          reinterpret_cast<uint32_t*>(hook_location)),
+                                                                          reinterpret_cast<uint32_t*>(hook_location) + 1),
                                                       flamingo::PageProtectionType::kNone),
                    hook_span);
 }
