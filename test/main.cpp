@@ -38,8 +38,8 @@ static decltype(auto) test_near(std::span<uint32_t> target, [[maybe_unused]] uin
 }
 
 static auto perform_near_hook_test(std::span<uint8_t> to_hook) {
-  std::span<uint32_t> hook_span = std::span<uint32_t>(reinterpret_cast<uint32_t*>(&to_hook[0]),
-                                                      reinterpret_cast<uint32_t*>(&to_hook[to_hook.size()]));
+  std::span<uint32_t> hook_span = std::span<uint32_t>(reinterpret_cast<uint32_t*>(to_hook.data()),
+                                                      reinterpret_cast<uint32_t*>(to_hook.data() + to_hook.size()));
   printf("TO HOOK: %p\n", to_hook.data());
   print_decode_loop(hook_span);
   puts("TEST NEAR...");
@@ -67,7 +67,7 @@ static decltype(auto) test_far(std::span<uint32_t> target, [[maybe_unused]] uint
       flamingo::PageProtectionType::kExecute | flamingo::PageProtectionType::kRead } },
     .fixup_inst_destination = fixup_ptr,
   };
-  printf("TRAMPOLINE: %p\n", &fixup_ptr.addr[0]);
+  printf("TRAMPOLINE: %p\n", fixup_ptr.addr.data());
   // Attempt to write a hook from target --> callback (just for testing purposes)
   // Hook size is 5, but we only fixup 4
   fixups.CopyOriginalInsts();
@@ -76,8 +76,8 @@ static decltype(auto) test_far(std::span<uint32_t> target, [[maybe_unused]] uint
 }
 
 static auto perform_far_hook_test(std::span<uint8_t> to_hook) {
-  std::span<uint32_t> hook_span = std::span<uint32_t>(reinterpret_cast<uint32_t*>(&to_hook[0]),
-                                                      reinterpret_cast<uint32_t*>(&to_hook[to_hook.size()]));
+  std::span<uint32_t> hook_span = std::span<uint32_t>(reinterpret_cast<uint32_t*>(to_hook.data()),
+                                                      reinterpret_cast<uint32_t*>(to_hook.data() + to_hook.size()));
   printf("TO HOOK: %p\n", to_hook.data());
   print_decode_loop(hook_span);
   puts("TEST FAR...");
@@ -110,7 +110,7 @@ static void test_no_fixups() {
     fixup_validator.expect_opc(ARM64_INS_STP);
     fixup_validator.expect_opc(ARM64_INS_STP);
     // Callback
-    fixup_validator.expect_b(&results.target.addr[4]);
+    fixup_validator.expect_b(results.target.addr.data() + 4);
   }
   {
     auto results = perform_far_hook_test(to_hook);
@@ -121,11 +121,11 @@ static void test_no_fixups() {
     fixup_validator.expect_opc(ARM64_INS_STP);
     // Callback (ldr x17, DATA[0]; br x17)
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17,
-                                                           round_up8(&results.fixup_inst_destination.addr[6]));
+                                                           round_up8(results.fixup_inst_destination.addr.data() + 6));
     fixup_validator.expect_ops<ARM64_OP_REG>(ARM64_INS_BR, ARM64_REG_X17);
     // Data validation
     // Check callback point is valid
-    fixup_validator.expect_big_data(reinterpret_cast<uint64_t>(&results.target.addr[4]));
+    fixup_validator.expect_big_data(reinterpret_cast<uint64_t>(results.target.addr.data() + 4));
   }
 }
 
@@ -146,36 +146,36 @@ static void test_bls_tbzs_within_hook() {
     auto results = perform_near_hook_test(to_hook);
     TestWrapper fixup_validator(results.fixup_inst_destination.addr, "Near hook bls/tbzs");
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_IMM>(
-        ARM64_INS_TBNZ, ARM64_REG_W8, 0, (int64_t)&results.fixup_inst_destination.addr[3]);
+        ARM64_INS_TBNZ, ARM64_REG_W8, 0, (int64_t)(results.fixup_inst_destination.addr.data() + 3));
     fixup_validator.expect_opc(ARM64_INS_MOV);
     fixup_validator.expect_opc(ARM64_INS_BL);
     fixup_validator.expect_opc(ARM64_INS_MOV);
     // Callback
-    fixup_validator.expect_b(&results.target.addr[4]);
+    fixup_validator.expect_b(results.target.addr.data() + 4);
   }
   {
     auto results = perform_far_hook_test(to_hook);
     TestWrapper fixup_validator(results.fixup_inst_destination.addr, "Far hook bls/tbzs");
     // tbnz is still close, should still be emitted, but should still point to the mov, which is at idx 4
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_IMM>(
-        ARM64_INS_TBNZ, ARM64_REG_W8, 0, (int64_t)&results.fixup_inst_destination.addr[4]);
+        ARM64_INS_TBNZ, ARM64_REG_W8, 0, (int64_t)(results.fixup_inst_destination.addr.data() + 4));
     // mov is the same
     fixup_validator.expect_opc(ARM64_INS_MOV);
     // bl should turn into an ldr x17, DATA[0]; blr x17
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17,
-                                                           round_up8(&results.fixup_inst_destination.addr[7]));
+                                                           round_up8(results.fixup_inst_destination.addr.data() + 7));
     fixup_validator.expect_ops<ARM64_OP_REG>(ARM64_INS_BLR, ARM64_REG_X17);
     fixup_validator.expect_opc(ARM64_INS_MOV);
     // Callback (ldr x17, DATA[1]; br x17)
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17,
-                                                           round_up8(&results.fixup_inst_destination.addr[9]));
+                                                           round_up8(results.fixup_inst_destination.addr.data() + 9));
     fixup_validator.expect_ops<ARM64_OP_REG>(ARM64_INS_BR, ARM64_REG_X17);
     // Data validation
     // The branch destination should be -0xB06B0 relative to the start of the hook.
     // Thus: target == reinterpret_cast<uint64_t>(&
     fixup_validator.expect_big_data(reinterpret_cast<uint64_t>(results.target.addr.data()) - 0xB06B0);
     // Check callback point is valid
-    fixup_validator.expect_big_data(reinterpret_cast<uint64_t>(&results.target.addr[4]));
+    fixup_validator.expect_big_data(reinterpret_cast<uint64_t>(results.target.addr.data() + 4));
   }
 }
 
@@ -199,10 +199,10 @@ static void test_ldr_ldrb_tbnz_bl() {
     // TBNZ should jump straight to the hook location if taken
     // TODO: This test should change once we support near tbz/tbnz optimizations
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_IMM>(ARM64_INS_TBNZ, ARM64_REG_W8, 0,
-                                                                         (int64_t)&results.target.addr[5]);
+                                                                         (int64_t)(results.target.addr.data() + 5));
     fixup_validator.expect_opc(ARM64_INS_MOV);
     // Callback
-    fixup_validator.expect_b(&results.target.addr[4]);
+    fixup_validator.expect_b(results.target.addr.data() + 4);
     // Data validation
   }
   {
@@ -212,23 +212,23 @@ static void test_ldr_ldrb_tbnz_bl() {
     fixup_validator.expect_opc(ARM64_INS_LDRB);
     // TBNZ should jump over the following instruction if taken
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_IMM>(
-        ARM64_INS_TBNZ, ARM64_REG_W8, 0, (int64_t)&results.fixup_inst_destination.addr[4]);
+        ARM64_INS_TBNZ, ARM64_REG_W8, 0, (int64_t)(results.fixup_inst_destination.addr.data() + 4));
     // B instruction should jump to skip the following far branch call
-    fixup_validator.expect_b(&results.fixup_inst_destination.addr[6]);
+    fixup_validator.expect_b(results.fixup_inst_destination.addr.data() + 6);
     // Far branch call is given by an ldr x17, DATA[0]; br x17
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17,
-                                                           round_up8(&results.fixup_inst_destination.addr[9]));
+                                                           round_up8(results.fixup_inst_destination.addr.data() + 9));
     fixup_validator.expect_ops<ARM64_OP_REG>(ARM64_INS_BR, ARM64_REG_X17);
     fixup_validator.expect_opc(ARM64_INS_MOV);
     // Callback (ldr x17, DATA[1]; br x17)
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17,
-                                                           round_up8(&results.fixup_inst_destination.addr[11]));
+                                                           round_up8(results.fixup_inst_destination.addr.data() + 11));
     fixup_validator.expect_ops<ARM64_OP_REG>(ARM64_INS_BR, ARM64_REG_X17);
     // Data validation
     // Branch destination for tbnz taken should be hook[5]
-    fixup_validator.expect_big_data((uint64_t)&results.target.addr[5]);
+    fixup_validator.expect_big_data((uint64_t)(results.target.addr.data() + 5));
     // Check callback point is valid
-    fixup_validator.expect_big_data(reinterpret_cast<uint64_t>(&results.target.addr[4]));
+    fixup_validator.expect_big_data(reinterpret_cast<uint64_t>(results.target.addr.data() + 4));
   }
 }
 
@@ -250,12 +250,12 @@ static void test_adrp() {
     // ADRP is replaced with an ldr to load the data directly
     // LDR x9, DATA[0]
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X9,
-                                                           round_up8(&results.fixup_inst_destination.addr[5]));
+                                                           round_up8(results.fixup_inst_destination.addr.data() + 5));
     fixup_validator.expect_opc(ARM64_INS_MOV);
     fixup_validator.expect_opc(ARM64_INS_STR);
     fixup_validator.expect_opc(ARM64_INS_STR);
     // Callback
-    fixup_validator.expect_b(&results.target.addr[4]);
+    fixup_validator.expect_b(results.target.addr.data() + 4);
     // Data validation
     // ADRP result must match
     fixup_validator.expect_big_data((int64_t)(results.target.addr.data()) & ~0xfff);
@@ -266,18 +266,18 @@ static void test_adrp() {
     // ADRP is replaced with an ldr to load the data directly
     // LDR x9, DATA[0]
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X9,
-                                                           round_up8(&results.fixup_inst_destination.addr[6]));
+                                                           round_up8(results.fixup_inst_destination.addr.data() + 6));
     fixup_validator.expect_opc(ARM64_INS_MOV);
     fixup_validator.expect_opc(ARM64_INS_STR);
     fixup_validator.expect_opc(ARM64_INS_STR);
     // Callback (ldr x17, DATA[1]; br x17)
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17,
-                                                           round_up8(&results.fixup_inst_destination.addr[8]));
+                                                           round_up8(results.fixup_inst_destination.addr.data() + 8));
     fixup_validator.expect_ops<ARM64_OP_REG>(ARM64_INS_BR, ARM64_REG_X17);
     // ADRP result must match
     fixup_validator.expect_big_data((int64_t)(results.target.addr.data()) & ~0xfff);
     // Check callback point is valid
-    fixup_validator.expect_big_data(reinterpret_cast<uint64_t>(&results.target.addr[4]));
+    fixup_validator.expect_big_data(reinterpret_cast<uint64_t>(results.target.addr.data() + 4));
   }
 }
 
@@ -303,10 +303,10 @@ static void test_neg_adrp() {
     // ADRP is replaced with an ldr to load the data directly
     // LDR x8, DATA[0]
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X8,
-                                                           round_up8(&results.fixup_inst_destination.addr[6]));
+                                                           round_up8(results.fixup_inst_destination.addr.data() + 6));
     fixup_validator.expect_opc(ARM64_INS_ADD);
     // Callback
-    fixup_validator.expect_b(&results.target.addr[4]);
+    fixup_validator.expect_b(results.target.addr.data() + 4);
     // Data validation
     // ADRP result must match
     fixup_validator.expect_big_data(((int64_t)(results.target.addr.data()) - 0x14E8000) & ~0xfff);
@@ -316,29 +316,29 @@ static void test_neg_adrp() {
     TestWrapper fixup_validator(results.fixup_inst_destination.addr, "Far hook negative adrp");
     fixup_validator.expect_opc(ARM64_INS_CMP);
     // b.hi past following b to ldr + br pair
-    fixup_validator.expect_b(&results.fixup_inst_destination.addr[3]);
+    fixup_validator.expect_b(results.fixup_inst_destination.addr.data() + 3);
     // b over ldr + br pair
-    fixup_validator.expect_b(&results.fixup_inst_destination.addr[5]);
+    fixup_validator.expect_b(results.fixup_inst_destination.addr.data() + 5);
     // LDR x17, DATA[0]
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17,
-                                                           round_up8(&results.fixup_inst_destination.addr[10]));
+                                                           round_up8(results.fixup_inst_destination.addr.data() + 10));
     fixup_validator.expect_ops<ARM64_OP_REG>(ARM64_INS_BR, ARM64_REG_X17);
     // ADRP is replaced with an ldr to load the data directly
     // LDR x9, DATA[1]
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X8,
-                                                           round_up8(&results.fixup_inst_destination.addr[12]));
+                                                           round_up8(results.fixup_inst_destination.addr.data() + 12));
     fixup_validator.expect_opc(ARM64_INS_ADD);
     // Callback
     fixup_validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17,
-                                                           round_up8(&results.fixup_inst_destination.addr[14]));
+                                                           round_up8(results.fixup_inst_destination.addr.data() + 14));
     fixup_validator.expect_ops<ARM64_OP_REG>(ARM64_INS_BR, ARM64_REG_X17);
     // Data validation
     // B.hi destination should match
-    fixup_validator.expect_big_data((uint64_t)&results.target.addr[6]);
+    fixup_validator.expect_big_data((uint64_t)(results.target.addr.data() + 6));
     // ADRP result must match
     fixup_validator.expect_big_data(((int64_t)(results.target.addr.data()) - 0x14E8000) & ~0xfff);
     // Check callback point is valid
-    fixup_validator.expect_big_data(reinterpret_cast<uint64_t>(&results.target.addr[4]));
+    fixup_validator.expect_big_data(reinterpret_cast<uint64_t>(results.target.addr.data() + 4));
   }
 }
 

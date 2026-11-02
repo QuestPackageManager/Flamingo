@@ -12,15 +12,16 @@
 namespace {
 
 auto perform_far_hook_test(uintptr_t hook_location, std::span<uint8_t> to_hook) {
-  std::span<uint32_t> hook_span = std::span<uint32_t>(reinterpret_cast<uint32_t*>(&to_hook[0]),
-                                                      reinterpret_cast<uint32_t*>(&to_hook[to_hook.size()]));
+  std::span<uint32_t> hook_span = std::span<uint32_t>(reinterpret_cast<uint32_t*>(to_hook.data()),
+                                                      reinterpret_cast<uint32_t*>(to_hook.data() + to_hook.size()));
   fmt::println("TO HOOK: {}", fmt::ptr(hook_span.data()));
   print_decode_loop(hook_span);
   // Give me back a pointer to some "far" allocated region that we can touch
-  return alloc_far(flamingo::PointerWrapper<uint32_t>(std::span<uint32_t>(reinterpret_cast<uint32_t*>(hook_location),
-                                                                          reinterpret_cast<uint32_t*>(hook_location) + 1),
-                                                      flamingo::PageProtectionType::kNone),
-                   hook_span);
+  return alloc_far(
+      flamingo::PointerWrapper<uint32_t>(std::span<uint32_t>(reinterpret_cast<uint32_t*>(hook_location),
+                                                             reinterpret_cast<uint32_t*>(hook_location) + 1),
+                                         flamingo::PageProtectionType::kNone),
+      hook_span);
 }
 
 void test_simple_hook() {
@@ -51,8 +52,7 @@ void test_simple_hook() {
     TestWrapper validator(hook_target_far, "Far hook no fixups");
     print_decode_loop(hook_target_far);
     // Callback (ldr x17, DATA[0]; br x17)
-    validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17,
-          round_up8(&hook_target_far[2]));
+    validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17, round_up8(&hook_target_far[2]));
     validator.expect_ops<ARM64_OP_REG>(ARM64_INS_BR, ARM64_REG_X17);
     // Data validation
     // Check callback point is valid
@@ -65,7 +65,8 @@ void test_simple_hook() {
       ERROR("Failed to uninstall: failure mode: {}", uninstall_result.error());
     }
     if (uninstall_result.value() == true) {
-      ERROR("Uninstall should have wiped this target clean, since there is only one hook, but didn't!? Target: {}", fmt::ptr(hook_target_far.data()));
+      ERROR("Uninstall should have wiped this target clean, since there is only one hook, but didn't!? Target: {}",
+            fmt::ptr(hook_target_far.data()));
     }
     TestWrapper validate_uninstall(hook_target_far, "After uninstall, return to original");
     print_decode_loop(hook_target_far);
@@ -97,7 +98,7 @@ void test_hook_with_orig() {
   }
   auto hook_target_far = perform_far_hook_test(hook_function_to_call, to_hook);
   auto result = flamingo::Install(
-      flamingo::HookInfo{ (void (*)())hook_function_to_call, hook_target_far.data(), (void (**)()) &fixup_result_ptr });
+      flamingo::HookInfo{ (void (*)())hook_function_to_call, hook_target_far.data(), (void (**)())&fixup_result_ptr });
   if (!result.has_value()) {
     ERROR("Installation result failed, index: {}", result.error().index());
   }
@@ -114,15 +115,13 @@ void test_hook_with_orig() {
     fixups.expect_opc(ARM64_INS_STP);
     fixups.expect_opc(ARM64_INS_STP);
     // Callback (ldr x17, DATA[0]; br x17)
-    fixups.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17,
-          round_up8(&fixup_result.value()[6]));
+    fixups.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17, round_up8(&fixup_result.value()[6]));
     fixups.expect_ops<ARM64_OP_REG>(ARM64_INS_BR, ARM64_REG_X17);
     // Data validation
     // Check callback point is valid
     fixups.expect_big_data(reinterpret_cast<uint64_t>(&hook_target_far[4]));
   }
 }
-
 
 void test_multi_hook() {
   // Boilerplate for the test wrapper
@@ -138,14 +137,13 @@ void test_multi_hook() {
   // non-midpoint)
   auto hook_target_far = perform_far_hook_test(hook_function_to_call, to_hook);
   auto result = flamingo::Install(
-    flamingo::HookInfo{ (void (*)())hook_function_to_call, hook_target_far.data(), (void (**)()) &fixup_result_ptr });
+      flamingo::HookInfo{ (void (*)())hook_function_to_call, hook_target_far.data(), (void (**)())&fixup_result_ptr });
   if (!result.has_value()) {
     ERROR("Installation result failed, index: {}", result.error().index());
   }
   // Second hook
   auto second_hook = flamingo::Install(
-    flamingo::HookInfo{ (void (*)())hook_function_to_call_2, hook_target_far.data(), (void (**)())&orig_two}
-  );
+      flamingo::HookInfo{ (void (*)())hook_function_to_call_2, hook_target_far.data(), (void (**)())&orig_two });
   if (!result.has_value()) {
     ERROR("Installation result for hook 2 failed, index: {}", result.error().index());
   }
@@ -154,8 +152,7 @@ void test_multi_hook() {
     TestWrapper validator(hook_target_far, "Far hook no fixups");
     print_decode_loop(hook_target_far);
     // Callback (ldr x17, DATA[0]; br x17)
-    validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17,
-          round_up8(&hook_target_far[2]));
+    validator.expect_ops<ARM64_OP_REG, ARM64_OP_IMM>(ARM64_INS_LDR, ARM64_REG_X17, round_up8(&hook_target_far[2]));
     validator.expect_ops<ARM64_OP_REG>(ARM64_INS_BR, ARM64_REG_X17);
     // Data validation
     // Check callback point is valid
@@ -163,7 +160,8 @@ void test_multi_hook() {
   }
   // Hook 2's orig pointer should refer to hook 1's target
   if ((uintptr_t)orig_two != hook_function_to_call) {
-    ERROR("Hook 2 should call hook 1 as part of hook 2's orig call! Instead, hook 2's orig is: 0x{:x}", (uintptr_t)orig_two);
+    ERROR("Hook 2 should call hook 1 as part of hook 2's orig call! Instead, hook 2's orig is: 0x{:x}",
+          (uintptr_t)orig_two);
   }
   // Now, uninstall hook 1. Hook 2's orig pointer should then refer to the fixup pointer
   auto uninstall_result = flamingo::Uninstall(result.value().returned_handle);
@@ -171,7 +169,8 @@ void test_multi_hook() {
     ERROR("Failed to uninstall: failure mode: {}", uninstall_result.error());
   }
   if (uninstall_result.value() == false) {
-    ERROR("Uninstall should NOT have wiped this target clean, since there is still one hook left. Target: {}", fmt::ptr(hook_target_far.data()));
+    ERROR("Uninstall should NOT have wiped this target clean, since there is still one hook left. Target: {}",
+          fmt::ptr(hook_target_far.data()));
   }
   // Get orig pointer for the hook and compare it to orig_two's held pointer now
   auto fixup_result = flamingo::FixupPointerFor(flamingo::TargetDescriptor(hook_target_far.data()));
@@ -179,7 +178,10 @@ void test_multi_hook() {
     ERROR("Failed to get fixup pointer for target: {}", fmt::ptr(hook_target_far.data()));
   }
   if ((uintptr_t)orig_two != (uintptr_t)fixup_result.value().data()) {
-    ERROR("Hook 2 should fixups for the target as part of hook 2's orig call! Instead, hook 2's orig is: 0x{:x} and the fixups are: {}", (uintptr_t)orig_two, fmt::ptr(fixup_result.value().data()));
+    ERROR(
+        "Hook 2 should fixups for the target as part of hook 2's orig call! Instead, hook 2's orig is: 0x{:x} and the "
+        "fixups are: {}",
+        (uintptr_t)orig_two, fmt::ptr(fixup_result.value().data()));
   }
 }
 }  // namespace
