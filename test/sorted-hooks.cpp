@@ -22,8 +22,8 @@
 using namespace flamingo;
 
 static std::span<uint32_t> perform_far_hook_test(uintptr_t hook_location, std::span<uint8_t> to_hook) {
-  std::span<uint32_t> hook_span = std::span<uint32_t>(reinterpret_cast<uint32_t*>(&to_hook[0]),
-                                                      reinterpret_cast<uint32_t*>(&to_hook[to_hook.size()]));
+  std::span<uint32_t> hook_span = std::span<uint32_t>(reinterpret_cast<uint32_t*>(to_hook.data()),
+                                                      reinterpret_cast<uint32_t*>(to_hook.data() + to_hook.size()));
   return alloc_far(flamingo::PointerWrapper<uint32_t>(std::span<uint32_t>(reinterpret_cast<uint32_t*>(hook_location),
                                                                           reinterpret_cast<uint32_t*>(hook_location)),
                                                       flamingo::PageProtectionType::kNone),

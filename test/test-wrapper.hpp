@@ -29,11 +29,11 @@
 // - Dump the trampoline
 // - Dump the new hook
 // Perhaps we make TestWrapper take a Fixups instance for this? That way we can do all three of those.
-#define ERROR(...)                     \
-  do {                                    \
+#define ERROR(...)                   \
+  do {                               \
     fmt::print(stderr, __VA_ARGS__); \
-    fmt::print(stderr, "\n");             \
-    std::exit(1);                         \
+    fmt::print(stderr, "\n");        \
+    std::exit(1);                    \
   } while (0)
 
 // Converts a pointer to data into the next 64b multiple for use with tests with differing alignments.
@@ -55,8 +55,8 @@ struct TestWrapper {
     start_test();
   }
   TestWrapper(std::span<uint8_t> bytes, std::string_view test)
-      : data(std::span<uint32_t>(reinterpret_cast<uint32_t*>(&bytes[0]),
-                                 reinterpret_cast<uint32_t*>(&bytes[bytes.size()]))),
+      : data(std::span<uint32_t>(reinterpret_cast<uint32_t*>(bytes.data()),
+                                 reinterpret_cast<uint32_t*>(bytes.data() + bytes.size()))),
         test_name(test) {
     start_test();
   }

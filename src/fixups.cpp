@@ -136,7 +136,7 @@ struct FixupContext {
       : target(target),
         fixup_writer(fixup_ptr),
         target_start(get_untagged_pc(target.data())),
-        target_end(get_untagged_pc(&target[target.size()])) {
+        target_end(get_untagged_pc(target.data() + target.size())) {
     target_to_fixups.resize(target.size());
     branch_ref_map.resize(target.size());
     // based off of the size of the fixups, we allocate accordingly.
@@ -146,7 +146,7 @@ struct FixupContext {
   }
 
   auto GetFixupPC() const {
-    return get_untagged_pc(&fixup_writer.target.addr[fixup_writer.target_offset]);
+    return get_untagged_pc(fixup_writer.target.addr.data() + fixup_writer.target_offset);
   }
 
   auto Write(uint32_t inst) {
@@ -155,6 +155,7 @@ struct FixupContext {
   void WriteData(uint_fast16_t fixup_idx, uint32_t data, uint32_t imm_mask, uint_fast16_t lshift,
                  uint_fast16_t rshift) {
     FLAMINGO_ASSERT(fixup_idx < fixup_writer.target_offset);
+    FLAMINGO_ASSERT(fixup_idx < fixup_writer.target.addr.size());
     uint_fast16_t data_index = data_block.size();
     // Pointer is known to be little endian
     FLAMINGO_DEBUG("Adding 32b data: 0x{:x} at data index: {} for fixup index: {} ({})", data, data_index, fixup_idx,
@@ -173,6 +174,7 @@ struct FixupContext {
   void WriteData(uint_fast16_t fixup_idx, uint64_t large_data, uint32_t imm_mask, uint_fast16_t lshift,
                  uint_fast16_t rshift) {
     FLAMINGO_ASSERT(fixup_idx < fixup_writer.target_offset);
+    FLAMINGO_ASSERT(fixup_idx < fixup_writer.target.addr.size());
     uint_fast16_t data_index = data_block.size();
     // Pointer is known to be little endian
     FLAMINGO_DEBUG("Adding 64b data: 0x{:x} at data index: {} for fixup index: {} ({})", large_data, data_index,
@@ -511,11 +513,11 @@ csh getHandle() {
     if (e1 != CS_ERR_OK || e2 != CS_ERR_OK) {
       FLAMINGO_ABORT("Capstone initialization failed: {}, {}", static_cast<int>(e1), static_cast<int>(e2));
     }
-    #ifdef GIT_COMMIT
+#ifdef GIT_COMMIT
     FLAMINGO_DEBUG("Hello from flamingo! Commit: {:#08x}", GIT_COMMIT);
-    #else
+#else
     FLAMINGO_DEBUG("Hello from flamingo! Unknown build commit hash");
-    #endif
+#endif
     init = true;
   }
   return handle;
@@ -544,7 +546,7 @@ void ShimTarget::WriteJump(void* address) {
 
 void ShimTarget::WriteCallback(ProtectionWriter<uint32_t>& writer, uint32_t const* target) {
   constexpr uint32_t branch_imm_mask = 0b00000011111111111111111111111111U;
-  auto delta = get_untagged_pc(target) - get_untagged_pc(&writer.target.addr[writer.target_offset]);
+  auto delta = get_untagged_pc(target) - get_untagged_pc(writer.target.addr.data() + writer.target_offset);
   if (std::llabs(delta) > (branch_imm_mask << 1) + 1) {
     // Too far for b. Emit a br instead.
     // TODO: Allow for different registers other than just x17
@@ -595,9 +597,10 @@ void Fixups::PerformFixupsAndCallback() {
   // - Data section...
 
   cs_insn* insns = nullptr;
-  [[maybe_unused]] auto count = cs_disasm(
-      flamingo::getHandle(), reinterpret_cast<uint8_t const*>(&target.addr[0]), target.addr.size_bytes(),
-      static_cast<uint64_t>(get_untagged_pc(reinterpret_cast<uint64_t>(&target.addr[0]))), target.addr.size(), &insns);
+  [[maybe_unused]] auto count =
+      cs_disasm(flamingo::getHandle(), reinterpret_cast<uint8_t const*>(target.addr.data()), target.addr.size_bytes(),
+                static_cast<uint64_t>(get_untagged_pc(reinterpret_cast<uint64_t>(target.addr.data()))),
+                target.addr.size(), &insns);
   // We should never try to write fixups for something that isn't a valid instruction
   // However, sometimes capstone isn't the latest version or whatever, so we don't assert here
   // FLAMINGO_ASSERT(count == target.addr.size());
@@ -630,7 +633,7 @@ void Fixups::PerformFixupsAndCallback() {
   // Free the disassembled instructions from before the fixups
   if (insns != nullptr) cs_free(insns, count);
   // Now, write the callback after all of our fixups.
-  context.WriteCallback(&target.addr[target.addr.size()]);
+  context.WriteCallback(target.addr.data() + target.addr.size());
   // After we have written ALL of our fixups initially AND our callback, perform our second pass where we inject
   // immediate offsets. Most specifically, for data. To do this, we first start by laying out our data section directly,
   // and marking the start address as "base". Then, we compute offsets based off of base + data_index * sizeof(uint32_t)
@@ -661,8 +664,9 @@ void Fixups::PerformFixupsAndCallback() {
                                                    (tag.imm_mask & ((offset >> tag.rshift) << tag.lshift));
   }
   // Flush the icache for our fixups in case they were already cached from another hook call
-  __builtin___clear_cache(reinterpret_cast<char*>(&fixup_inst_destination.addr[0]),
-                          reinterpret_cast<char*>(&fixup_inst_destination.addr[fixup_inst_destination.addr.size()]));
+  __builtin___clear_cache(
+      reinterpret_cast<char*>(&fixup_inst_destination.addr[0]),
+      reinterpret_cast<char*>(fixup_inst_destination.addr.data() + fixup_inst_destination.addr.size()));
 }
 
 void Fixups::Log() const {
