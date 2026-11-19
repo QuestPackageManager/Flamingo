@@ -1,66 +1,27 @@
+name: Android test build
+
 on:
   workflow_dispatch:
   push:
-    branches-ignore:
-    - "version-*"
+    branches-ignore: ['version-*']
+  pull_request:
 
-env:
-  module_id: flamingo
-  qmodName: flamingo
+permissions:
+  contents: read
 
 jobs:
   build-android-test:
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v2
-        name: Checkout
+      - uses: actions/checkout@v4
+      - uses: seanmiddleditch/gha-setup-ninja@v5
+      - uses: Fernthedev/qpm-action@v2
+      - name: Build existing Android test
+        run: qpm2 s build-android-test
+      - uses: actions/upload-artifact@v4
         with:
-          submodules: true
-          lfs: true
-
-      - uses: seanmiddleditch/gha-setup-ninja@v3
-
-      - name: Create ndkpath.txt
-        run: |
-          echo "$ANDROID_NDK_LATEST_HOME" > ${GITHUB_WORKSPACE}/ndkpath.txt
-          cat ${GITHUB_WORKSPACE}/ndkpath.txt
-
-      - name: Setup qpm
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        uses: Fernthedev/qpm-action@v1
-        with:
-          workflow_token: ${{ secrets.GITHUB_TOKEN }}
-          restore: true
-          cache: true
-          publish: false
-
-      - name: QPM Collapse
-        run: qpm-rust collapse
-
-      - name: Build
-        run: |
-          cd ${GITHUB_WORKSPACE}
-          qpm-rust s build-android-test
-
-      - name: Get Library Name
-        id: libname
-        run: |
-          cd ./build/
-          pattern="lib${module_id}*.so"
-          files=( $pattern )
-          echo ::set-output name=NAME::"${files[0]}"
-  
-      - name: Upload non-debug artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.libname.outputs.NAME }}
-          path: ./build/${{ steps.libname.outputs.NAME }}
-          if-no-files-found: error
-
-      - name: Upload debug artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug_${{ steps.libname.outputs.NAME }}
-          path: ./build/debug/${{ steps.libname.outputs.NAME }}
+          name: flamingo-android-test
+          path: |
+            build/libflamingo.so
+            build/debug/libflamingo.so
           if-no-files-found: error

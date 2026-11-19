@@ -14,6 +14,7 @@ $NDKPath = Get-Content $PSScriptRoot/ndkpath.txt
 # Clean-Build-Folder
 # Build flamingo local Android test
 & cmake -G "Ninja" -DCMAKE_BUILD_TYPE="Debug" -DTEST_BUILD=0 -DTEST_ON_ANDROID=1 -B build
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & cmake --build ./build
 
 $ExitCode = $LastExitCode

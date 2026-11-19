@@ -2,160 +2,44 @@ name: NDK build
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
-    branches-ignore:
-      - "version-*"
-    tags:
-      - "v*"
+    branches-ignore: ['version-*']
 
-env:
-  module_id: flamingo
-  qmodName: flamingo
+permissions:
+  contents: read
 
 jobs:
   test-local:
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v2
-        name: Checkout
-        with:
-          submodules: true
-
-      - uses: seanmiddleditch/gha-setup-ninja@v3
-
-      - name: Set up Clang
-        uses: egor-tensin/setup-clang@v1
-        with:
-          version: latest
-          platform: x64
-
-      # Get QPM so we can bring in dependencies
-      - name: Setup qpm
-        uses: Fernthedev/qpm-action@v1
-        with:
-          workflow_token: ${{ secrets.GITHUB_TOKEN }}
-          restore: true
-          cache: true
-          publish: false
-
-      - name: QPM Collapse
-        run: qpm collapse
-
-      - name: Run test script
-        run: |
-          cd ${GITHUB_WORKSPACE}
-          ./test.sh
+      - uses: actions/checkout@v4
+      - uses: seanmiddleditch/gha-setup-ninja@v5
+      - uses: Fernthedev/qpm-action@v2
+      - name: Run existing tests
+        run: ./test.sh
 
   build:
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v2
-        name: Checkout
+      - uses: actions/checkout@v4
         with:
-          submodules: true
-          lfs: true
-
-      - uses: seanmiddleditch/gha-setup-ninja@v3
-
-      - name: Create ndkpath.txt
+          persist-credentials: false
+      - uses: seanmiddleditch/gha-setup-ninja@v5
+      - uses: Fernthedev/qpm-action@v2
+      - name: Build package
+        run: qpm2 qpkg --qmod
+      - name: Verify packaged library
         run: |
-          echo "$ANDROID_NDK_LATEST_HOME" > ${GITHUB_WORKSPACE}/ndkpath.txt
-          cat ${GITHUB_WORKSPACE}/ndkpath.txt
-
-      # get version from pushed tag
-      - name: Extract version
-        if: startsWith(github.ref, 'refs/tags/v')
-        id: version
-        run: |
-          echo "TAG=${GITHUB_REF#refs/tags/}" >> ${GITHUB_OUTPUT}
-          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> ${GITHUB_OUTPUT}
-
-      - name: Setup qpm
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        uses: Fernthedev/qpm-action@v1
+          python3 -c "from pathlib import Path; from zipfile import ZipFile; binary = Path('build/libflamingo.so').read_bytes(); assert ZipFile('flamingo.qpkg').read('bin/libflamingo.so') == binary; assert ZipFile('flamingo.qmod').read('libflamingo.so') == binary"
+      - name: Name debug artifact
+        run: cp build/debug/libflamingo.so build/debug_libflamingo.so
+      - uses: actions/upload-artifact@v4
         with:
-          workflow_token: ${{ secrets.GITHUB_TOKEN }}
-          restore: true
-          cache: true
-          publish: false
-
-      # if we have a tag, we are making a qpm release
-      - name: Setup qpm for release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: Fernthedev/qpm-action@v1
-        with:
-          workflow_token: ${{ secrets.GITHUB_TOKEN }}
-          restore: true
-          cache: true
-          publish: late
-          publish_token: ${{ secrets.QPM_TOKEN }}
-          version: ${{ steps.version.outputs.VERSION }}
-          tag: ${{ steps.version.outputs.TAG }}
-          qpm_release_bin: true
-          qpm_debug_bin: true
-          qpm_qmod: ${{ env.qmodName }}.qmod
-
-      - name: QPM Collapse
-        run: qpm collapse
-
-      - name: Build
-        run: |
-          cd ${GITHUB_WORKSPACE}
-          qpm s build
-
-      - name: Make mod.json
-        run: |
-          qpm qmod manifest
-
-      - name: Build & Create Qmod
-        run: |
-          cd ${GITHUB_WORKSPACE}
-          qpm qmod zip
-
-      - name: Get Library Name
-        id: libname
-        run: |
-          cd ./build/
-          pattern="lib${module_id}*.so"
-          files=( $pattern )
-          echo "NAME=${files[0]}" >> ${GITHUB_OUTPUT}
-
-      - name: Rename debug artifact
-        run: mv "./build/debug/${{ steps.libname.outputs.NAME }}" "./build/debug_${{steps.libname.outputs.NAME }}"
-
-      - name: Upload non-debug artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.libname.outputs.NAME }}
-          path: ./build/${{ steps.libname.outputs.NAME }}
+          name: flamingo
+          path: |
+            build/libflamingo.so
+            build/debug_libflamingo.so
+            flamingo.qmod
+            flamingo.qpkg
           if-no-files-found: error
-
-      - name: Upload debug artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug_${{ steps.libname.outputs.NAME }}
-          path: ./build/debug_${{ steps.libname.outputs.NAME }}
-          if-no-files-found: error
-
-      - name: Upload qmod artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{env.qmodName}}.qmod
-          path: ./${{ env.qmodName }}.qmod
-          if-no-files-found: error
-
-      # if we had a tag, we should make a release
-      - name: Upload release artifacts
-        if: startsWith(github.ref, 'refs/tags/v')
-        id: upload_file_release
-        uses: softprops/action-gh-release@v0.1.15
-        with:
-          tag_name: ${{ github.event.inputs.version }}
-          files: |
-            ./build/${{ steps.libname.outputs.NAME }}
-            ./build/debug_${{ steps.libname.outputs.NAME }}
-            ./${{ env.qmodName }}.qmod
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

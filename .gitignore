@@ -62,3 +62,7 @@ build_test
 
 build-linux/
 *.inc
+*.qpkg
+*.qmod
+mod.json
+qpm.settings.json

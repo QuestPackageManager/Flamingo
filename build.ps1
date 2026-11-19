@@ -13,7 +13,8 @@ $NDKPath = Get-Content $PSScriptRoot/ndkpath.txt
 
 # Clean-Build-Folder
 # Build flamingo (not as tests) as tests are built via different cmake line (-DTEST_BUILD=1, or unspecified)
-& cmake -G "Ninja" -DCMAKE_BUILD_TYPE="RelWithDebInfo" -DTEST_BUILD=0 -B build
+& cmake -G "Ninja" -DCMAKE_BUILD_TYPE="RelWithDebInfo" -DTEST_BUILD=0 -DTEST_ON_ANDROID=0 -B build
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & cmake --build ./build
 
 $ExitCode = $LastExitCode

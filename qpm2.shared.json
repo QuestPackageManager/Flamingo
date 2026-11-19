@@ -1,0 +1,88 @@
+{
+  "$schema": "https://raw.githubusercontent.com/QuestPackageManager/QPM.Package/refs/heads/main/qpm.shared.schema.json",
+  "config": {
+    "configVersion": "2.0.0",
+    "id": "flamingo",
+    "version": "1.3.1",
+    "additionalData": {
+      "description": "",
+      "author": "",
+      "license": "",
+      "url": "https://github.com/QuestPackageManager/Flamingo"
+    },
+    "workspace": {
+      "scripts": {
+        "build": [
+          "pwsh ./build.ps1",
+          "cmake -E make_directory extern/build/build",
+          "cmake -E copy build/libflamingo.so extern/build/build/libflamingo.so"
+        ],
+        "build-android-test": [
+          "pwsh ./build-android-test.ps1"
+        ]
+      },
+      "ndk": "^29.0.14206865",
+      "outBinaries": [
+        "build/libflamingo.so"
+      ],
+      "cmake": false
+    },
+    "qmod": {
+      "output": "flamingo.qmod",
+      "template": "mod.template.json",
+      "searchDirs": [
+        "./build"
+      ],
+      "includeFiles": [],
+      "id": "flamingo"
+    },
+    "dependencies": {
+      "fmt": {
+        "versionRange": "^12.2.1",
+        "qmod": "none"
+      }
+    },
+    "devDependencies": {
+      "capstone": {
+        "versionRange": "^5.0.9",
+        "qmod": "none"
+      },
+      "scotland2": {
+        "versionRange": "^0.1.6",
+        "qmod": "none"
+      }
+    },
+    "dependenciesDirectory": "extern",
+    "sharedDirectory": "shared",
+    "compileOptions": {
+      "includePaths": [
+        ""
+      ]
+    }
+  },
+  "restoredDependencies": {
+    "scotland2": {
+      "restoredVersion": "0.1.7",
+      "qpkgChecksum": "7e0beaa86e51a9b4b477841c59e99823493cb62dc4fa8d2cef793aab80e93dcd",
+      "restoredBinaries": [
+        "build/libsl2.so"
+      ],
+      "restoredEnv": {}
+    },
+    "capstone": {
+      "restoredVersion": "5.0.9",
+      "qpkgChecksum": "f28c2210107ade447dfd8f4e357503108de41ab1c7fdae3c01e594355a267efb",
+      "restoredBinaries": [
+        "libcapstone.a"
+      ],
+      "restoredEnv": {}
+    },
+    "fmt": {
+      "restoredVersion": "12.2.1",
+      "qpkgChecksum": "918012cba1ed2c388ffab91a7bf66e101d0afea8581f0aad9d971097f4217e7d",
+      "restoredBinaries": [],
+      "restoredEnv": {}
+    }
+  },
+  "env": {}
+}

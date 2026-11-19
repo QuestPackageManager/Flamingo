@@ -69,12 +69,12 @@ if (TEST_BUILD)
     target_include_directories(flamingo-static PUBLIC ${SHARED_DIR})
     target_include_directories(flamingo-static PRIVATE ${SOURCE_DIR} ${INCLUDE_DIR})
 
-    # Fetch capstone (v5.0.1)
+    # Fetch capstone (v5.0.9)
     include(FetchContent)
     FetchContent_Declare(
         capstone
         GIT_REPOSITORY https://github.com/capstone-engine/capstone.git
-        GIT_TAG 5.0.1
+        GIT_TAG 5.0.9
     )
 
     set(CAPSTONE_ARCHITECTURE_DEFAULT OFF)
@@ -82,7 +82,7 @@ if (TEST_BUILD)
 
     FetchContent_MakeAvailable(capstone)
     target_link_libraries(flamingo-static PUBLIC capstone -lstdc++)
-    target_include_directories(flamingo-static PUBLIC ${capstone_SOURCE_DIR}/include ${EXTERN_DIR}/includes/fmt/fmt/include)
+    target_include_directories(flamingo-static PUBLIC ${capstone_SOURCE_DIR}/include ${EXTERN_DIR}/includes/fmt)
 
     add_compile_definitions(TEST_BUILD)
     MESSAGE(STATUS "Compiling test build")
@@ -101,13 +101,22 @@ if (TEST_BUILD)
     add_test(apis api-test)
     add_test(sorting sorting-test)
 else()
-    include(qpm_defines.cmake)
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/qpm2.json" QPM_MANIFEST)
+    string(JSON COMPILE_ID GET "${QPM_MANIFEST}" id)
+    file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/ndkpath.txt" NDK_PATH LIMIT_COUNT 1)
+    file(TO_CMAKE_PATH "${NDK_PATH}" NDK_PATH)
+    set(CMAKE_TOOLCHAIN_FILE "${NDK_PATH}/build/cmake/android.toolchain.cmake")
+    set(ANDROID_ABI arm64-v8a)
+    set(ANDROID_PLATFORM 24)
+    set(ANDROID_STL c++_static)
     project(${COMPILE_ID})
 
     add_library(${COMPILE_ID} SHARED)
 
+    add_library(capstone STATIC IMPORTED)
+    set_target_properties(capstone PROPERTIES IMPORTED_LOCATION "${EXTERN_DIR}/libs/libcapstone.a")
     target_link_libraries(${COMPILE_ID} PRIVATE capstone -llog)
-    target_include_directories(${COMPILE_ID} PRIVATE ${EXTERN_DIR}/includes ${EXTERN_DIR}/includes/capstone/shared ${EXTERN_DIR}/includes/fmt/fmt/include)
+    target_include_directories(${COMPILE_ID} PRIVATE ${EXTERN_DIR}/includes ${EXTERN_DIR}/includes/capstone ${EXTERN_DIR}/includes/fmt)
     # add shared dir as include dir
     target_include_directories(${COMPILE_ID} PUBLIC ${SHARED_DIR})
     target_include_directories(${COMPILE_ID} PRIVATE ${SOURCE_DIR} ${INCLUDE_DIR})
@@ -120,9 +129,8 @@ else()
 
     if (TEST_ON_ANDROID)
         target_sources(${COMPILE_ID} PUBLIC ${SOURCE_DIR}/flamingo-stamp.cpp)
+        target_link_libraries(${COMPILE_ID} PRIVATE "${EXTERN_DIR}/libs/libsl2.so")
     endif()
-
-    include(extern.cmake)
 
     add_custom_command(TARGET ${COMPILE_ID} POST_BUILD
             COMMAND ${CMAKE_STRIP} -S -d --strip-all
