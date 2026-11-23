@@ -49,7 +49,7 @@
 
 #include <cassert>
 
-#ifdef ANDROID
+#if defined(ANDROID) && !defined(FLAMINGO_TEST_BUILD)
 #include "paper2_scotland2/shared/logger.hpp"
 
 #ifndef NDEBUG
