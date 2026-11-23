@@ -71,7 +71,7 @@
     },
     "capstone": {
       "restoredVersion": "5.0.9",
-      "qpkgChecksum": "f28c2210107ade447dfd8f4e357503108de41ab1c7fdae3c01e594355a267efb",
+      "qpkgChecksum": "8d22948cd286bd225d78fbf3affb374b1105cf9431767855f2066ce358888a55",
       "restoredBinaries": [
         "libcapstone.a"
       ],
