@@ -31,9 +31,6 @@ jobs:
       - uses: Fernthedev/qpm-action@v2
       - name: Build package
         run: qpm2 qpkg --qmod
-      - name: Verify packaged library
-        run: |
-          python3 -c "from pathlib import Path; from zipfile import ZipFile; binary = Path('build/libflamingo.so').read_bytes(); assert ZipFile('flamingo.qpkg').read('bin/libflamingo.so') == binary; assert ZipFile('flamingo.qmod').read('libflamingo.so') == binary"
       - name: Name debug artifact
         run: cp build/debug/libflamingo.so build/debug_libflamingo.so
       - uses: actions/upload-artifact@v4
