@@ -1,6 +1,7 @@
 #pragma once
 #include <fmt/format.h>
 #include <sys/mman.h>
+#include <unistd.h>
 #include <algorithm>
 #include <cstdint>
 #include <span>
@@ -28,7 +29,7 @@ inline PageProtectionType& operator&=(PageProtectionType& lhs, PageProtectionTyp
 }
 
 struct Page {
-  constexpr static uint_fast16_t PageSize = 4096;
+  inline static const uint_fast16_t PageSize = ::getpagesize();
   void* ptr;
   uint_fast16_t used_size;
   PageProtectionType protection;

@@ -1,5 +1,4 @@
 // Make a page
-// Pages should have sizes and are otherwise 4kb
 // If we do some allocation and determine that we didnt need the full set of allocation for our
 // page, we want to give it back. For now, though, we should just allocate out the pages regardless
 // And call a function to finalize our allocation pool or something on the allocator

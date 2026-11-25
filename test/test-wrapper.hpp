@@ -6,7 +6,7 @@
 #include <fmt/format.h>
 #include <linux/mman.h>
 #include <sys/mman.h>
-#include <sys/user.h>
+#include <unistd.h>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -176,15 +176,15 @@ struct TestAllocResult {
 
 inline auto alloc_near(std::span<uint32_t> target, size_t fixup_size) {
   // Alloc 2 pages so we can remap target too
-  auto result = mmap(nullptr, PAGE_SIZE * 2, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+  const size_t page_size = getpagesize();
+  auto result = mmap(nullptr, page_size * 2, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
   if (result == MAP_FAILED) {
     perror(strerror(errno));
   }
   std::memcpy(result, target.data(), target.size_bytes());
   return TestAllocResult{
     .target = std::span<uint32_t>((uint32_t*)result, (uint32_t*)result + target.size()),
-    .fixups = std::span<uint32_t>((uint32_t*)result + PAGE_SIZE / sizeof(uint32_t),
-                                  (uint32_t*)result + PAGE_SIZE / sizeof(uint32_t) + fixup_size),
+    .fixups = std::span<uint32_t>((uint32_t*)result + page_size / sizeof(uint32_t), fixup_size),
   };
 }
 
@@ -194,8 +194,9 @@ inline auto alloc_far(flamingo::PointerWrapper<uint32_t> target_fixups, std::spa
   // but I don't care enough for that
   constexpr auto kPageCount = 16384;
   constexpr auto kRange = 0x800000LL;
+  const size_t page_size = getpagesize();
   for (int i = 0; i < kPageCount; i++) {
-    auto result = mmap(nullptr, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    auto result = mmap(nullptr, page_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (result == MAP_FAILED) {
       perror(strerror(errno));
       break;

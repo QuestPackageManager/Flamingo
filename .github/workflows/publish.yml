@@ -1,0 +1,29 @@
+name: Publish QPM Package
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: Fernthedev/qpm-action@v2
+        with:
+          publish: late
+          publish_token: ${{ secrets.QPM_TOKEN }}
+      - name: Build package
+        run: qpm2 qpkg --qmod
+      - name: Name debug artifact
+        run: cp build/debug/libflamingo.so build/debug_libflamingo.so
+      - name: Upload debug library
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/debug_libflamingo.so
+          fail_on_unmatched_files: true

@@ -56,12 +56,32 @@ if(NOT "${GIT_INFO_H}" STREQUAL "${GIT_INFO_H_CURRENT}")
     file(WRITE "${GIT_INFO_H_PATH}" "${GIT_INFO_H}")
 endif()
 
-option(TEST_BUILD "Enable local executable test builds for sanity checks" ON)
+option(TEST_BUILD "Build the Flamingo test executables" ON)
 
-# If we are making a test build, go into this block instead
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/ndkpath.txt" NDK_PATH LIMIT_COUNT 1)
+file(TO_CMAKE_PATH "${NDK_PATH}" NDK_PATH)
+set(CMAKE_TOOLCHAIN_FILE "${NDK_PATH}/build/cmake/android.toolchain.cmake")
+set(ANDROID_ABI arm64-v8a)
+set(ANDROID_PLATFORM 24)
+set(ANDROID_STL c++_static)
+
 if (TEST_BUILD)
     project(flamingo-test)
+else()
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/qpm2.json" QPM_MANIFEST)
+    string(JSON COMPILE_ID GET "${QPM_MANIFEST}" id)
+    project(${COMPILE_ID})
+endif()
 
+add_library(capstone STATIC IMPORTED)
+set_target_properties(capstone PROPERTIES
+    IMPORTED_LOCATION "${EXTERN_DIR}/libs/libcapstone.a"
+    INTERFACE_INCLUDE_DIRECTORIES "${EXTERN_DIR}/includes/capstone"
+)
+
+if (TEST_BUILD)
+    # Run the ARM64 tests on Linux without an Android dynamic linker.
+    add_link_options(-static)
     # Static library of flamingo to link against for tests.
     # TODO: We may want to test a dynamic version at some point too
     add_library(flamingo-static ${SOURCE_DIR}/fixups.cpp ${SOURCE_DIR}/installer.cpp ${SOURCE_DIR}/page-allocator.cpp ${SOURCE_DIR}/capi.cpp)
@@ -69,22 +89,10 @@ if (TEST_BUILD)
     target_include_directories(flamingo-static PUBLIC ${SHARED_DIR})
     target_include_directories(flamingo-static PRIVATE ${SOURCE_DIR} ${INCLUDE_DIR})
 
-    # Fetch capstone (v5.0.1)
-    include(FetchContent)
-    FetchContent_Declare(
-        capstone
-        GIT_REPOSITORY https://github.com/capstone-engine/capstone.git
-        GIT_TAG 5.0.1
-    )
+    target_link_libraries(flamingo-static PUBLIC capstone)
+    target_include_directories(flamingo-static PUBLIC ${EXTERN_DIR}/includes/fmt)
 
-    set(CAPSTONE_ARCHITECTURE_DEFAULT OFF)
-    set(CAPSTONE_ARM64_SUPPORT ON)
-
-    FetchContent_MakeAvailable(capstone)
-    target_link_libraries(flamingo-static PUBLIC capstone -lstdc++)
-    target_include_directories(flamingo-static PUBLIC ${capstone_SOURCE_DIR}/include ${EXTERN_DIR}/includes/fmt/fmt/include)
-
-    add_compile_definitions(TEST_BUILD)
+    target_compile_definitions(flamingo-static PUBLIC FLAMINGO_TEST_BUILD)
     MESSAGE(STATUS "Compiling test build")
 
     add_executable(fixup-test ${CMAKE_CURRENT_SOURCE_DIR}/test/main.cpp)
@@ -97,17 +105,14 @@ if (TEST_BUILD)
     target_link_libraries(sorting-test PRIVATE flamingo-static)
     include(CTest)
 
-    add_test(fixups fixup-test)
-    add_test(apis api-test)
-    add_test(sorting sorting-test)
+    add_test(NAME fixups COMMAND fixup-test)
+    add_test(NAME apis COMMAND api-test)
+    add_test(NAME sorting COMMAND sorting-test)
 else()
-    include(qpm_defines.cmake)
-    project(${COMPILE_ID})
-
     add_library(${COMPILE_ID} SHARED)
 
     target_link_libraries(${COMPILE_ID} PRIVATE capstone -llog)
-    target_include_directories(${COMPILE_ID} PRIVATE ${EXTERN_DIR}/includes ${EXTERN_DIR}/includes/capstone/shared ${EXTERN_DIR}/includes/fmt/fmt/include)
+    target_include_directories(${COMPILE_ID} PRIVATE ${EXTERN_DIR}/includes ${EXTERN_DIR}/includes/fmt)
     # add shared dir as include dir
     target_include_directories(${COMPILE_ID} PUBLIC ${SHARED_DIR})
     target_include_directories(${COMPILE_ID} PRIVATE ${SOURCE_DIR} ${INCLUDE_DIR})
@@ -120,9 +125,8 @@ else()
 
     if (TEST_ON_ANDROID)
         target_sources(${COMPILE_ID} PUBLIC ${SOURCE_DIR}/flamingo-stamp.cpp)
+        target_link_libraries(${COMPILE_ID} PRIVATE "${EXTERN_DIR}/libs/libsl2.so")
     endif()
-
-    include(extern.cmake)
 
     add_custom_command(TARGET ${COMPILE_ID} POST_BUILD
             COMMAND ${CMAKE_STRIP} -S -d --strip-all
