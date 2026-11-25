@@ -15,6 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: seanmiddleditch/gha-setup-ninja@v5
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: latest
+          platform: x64
       - uses: Fernthedev/qpm-action@v2
       - name: Run existing tests
         run: ./test.sh
