@@ -56,7 +56,7 @@ if(NOT "${GIT_INFO_H}" STREQUAL "${GIT_INFO_H_CURRENT}")
     file(WRITE "${GIT_INFO_H_PATH}" "${GIT_INFO_H}")
 endif()
 
-option(TEST_BUILD "Build the Flamingo test executables" ON)
+option(TEST_BUILD "Enable local executable test builds for sanity checks" ON)
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/ndkpath.txt" NDK_PATH LIMIT_COUNT 1)
 file(TO_CMAKE_PATH "${NDK_PATH}" NDK_PATH)
@@ -73,12 +73,6 @@ else()
     project(${COMPILE_ID})
 endif()
 
-add_library(capstone STATIC IMPORTED)
-set_target_properties(capstone PROPERTIES
-    IMPORTED_LOCATION "${EXTERN_DIR}/libs/libcapstone.a"
-    INTERFACE_INCLUDE_DIRECTORIES "${EXTERN_DIR}/includes/capstone"
-)
-
 if (TEST_BUILD)
     # Run the ARM64 tests on Linux without an Android dynamic linker.
     add_link_options(-static)
@@ -89,8 +83,22 @@ if (TEST_BUILD)
     target_include_directories(flamingo-static PUBLIC ${SHARED_DIR})
     target_include_directories(flamingo-static PRIVATE ${SOURCE_DIR} ${INCLUDE_DIR})
 
-    target_link_libraries(flamingo-static PUBLIC capstone)
-    target_include_directories(flamingo-static PUBLIC ${EXTERN_DIR}/includes/fmt)
+    # Fetch capstone (v5.0.9) this needs to be kept in sync with the qpm version
+    # However, we don't use the qpm version directly, since we want to run on platforms other than arm64
+    include(FetchContent)
+    FetchContent_Declare(
+        capstone
+        GIT_REPOSITORY https://github.com/capstone-engine/capstone.git
+        GIT_TAG 5.0.9
+    )
+
+    set(CAPSTONE_ARCHITECTURE_DEFAULT OFF)
+    set(CAPSTONE_ARM64_SUPPORT ON)
+
+    FetchContent_MakeAvailable(capstone)
+
+    target_link_libraries(flamingo-static PUBLIC capstone -lstdc++)
+    target_include_directories(flamingo-static PUBLIC ${capstone_SOURCE_DIR}/include ${EXTERN_DIR}/includes/fmt)
 
     target_compile_definitions(flamingo-static PUBLIC FLAMINGO_TEST_BUILD)
     MESSAGE(STATUS "Compiling test build")
@@ -110,6 +118,12 @@ if (TEST_BUILD)
     add_test(NAME sorting COMMAND sorting-test)
 else()
     add_library(${COMPILE_ID} SHARED)
+
+    add_library(capstone STATIC IMPORTED)
+    set_target_properties(capstone PROPERTIES
+        IMPORTED_LOCATION "${EXTERN_DIR}/libs/libcapstone.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${EXTERN_DIR}/includes/capstone"
+    )
 
     target_link_libraries(${COMPILE_ID} PRIVATE capstone -llog)
     target_include_directories(${COMPILE_ID} PRIVATE ${EXTERN_DIR}/includes ${EXTERN_DIR}/includes/fmt)

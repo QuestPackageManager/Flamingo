@@ -43,12 +43,12 @@
       }
     },
     "devDependencies": {
-      "capstone": {
-        "versionRange": "^5.0.9",
+      "scotland2": {
+        "versionRange": "^0.1.8",
         "qmod": "none"
       },
-      "scotland2": {
-        "versionRange": "^0.1.6",
+      "capstone": {
+        "versionRange": "^5.0.9",
         "qmod": "none"
       }
     },
@@ -61,11 +61,17 @@
     }
   },
   "restoredDependencies": {
+    "fmt": {
+      "restoredVersion": "12.2.1",
+      "qpkgChecksum": "918012cba1ed2c388ffab91a7bf66e101d0afea8581f0aad9d971097f4217e7d",
+      "restoredBinaries": [],
+      "restoredEnv": {}
+    },
     "scotland2": {
-      "restoredVersion": "0.1.7",
-      "qpkgChecksum": "7e0beaa86e51a9b4b477841c59e99823493cb62dc4fa8d2cef793aab80e93dcd",
+      "restoredVersion": "0.1.8",
+      "qpkgChecksum": "2a766c43fe8f0210a76a50f49f3214ec5f248fa71f111a1a509e1f6024b99331",
       "restoredBinaries": [
-        "build/libsl2.so"
+        "libsl2.so"
       ],
       "restoredEnv": {}
     },
@@ -75,12 +81,6 @@
       "restoredBinaries": [
         "libcapstone.a"
       ],
-      "restoredEnv": {}
-    },
-    "fmt": {
-      "restoredVersion": "12.2.1",
-      "qpkgChecksum": "918012cba1ed2c388ffab91a7bf66e101d0afea8581f0aad9d971097f4217e7d",
-      "restoredBinaries": [],
       "restoredEnv": {}
     }
   },

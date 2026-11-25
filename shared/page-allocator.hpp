@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <span>
 #include "util.hpp"
 
@@ -29,7 +30,7 @@ inline PageProtectionType& operator&=(PageProtectionType& lhs, PageProtectionTyp
 }
 
 struct Page {
-  inline static const uint_fast16_t PageSize = ::getpagesize();
+  inline static uint_fast16_t const PageSize = ::getpagesize();
   void* ptr;
   uint_fast16_t used_size;
   PageProtectionType protection;
